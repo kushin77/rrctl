@@ -99,4 +99,6 @@ Fish:
 func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(completionCmd)
+	// repo-defrag command is registered in repo_defrag.go's init()
+	// repo-autofix command is registered in repo_autofix.go's init()
 }

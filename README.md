@@ -1,5 +1,11 @@
 # rrctl - The DevOps Swiss Army Knife
 
+Open-source mirror staging (ignored)
+
+This directory is used to stage content for the rrctl open-source mirror. All files are ignored by git except this README.
+
+Use external tooling/pipelines to publish or sync this content to the designated public repository.
+
 [![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kushin77/elevatedIQ)](https://goreportcard.com/report/github.com/kushin77/elevatedIQ)
@@ -17,7 +23,57 @@ rrctl (RoundRobin Control) is the command-line companion to the ElevatedIQ.ai pl
 
 ## ✨ Key Features
 
+### 🧹 Repo Defragmentation (CI hygiene)
+Analyze GitHub Actions workflows, pull requests, and repository environments for staleness, failures, and consolidation opportunities. Works offline for local workflow scans; optionally enriches with GitHub API.
+
+```bash
+# Local scan of .github/workflows (no API required)
+rrctl repo-defrag --path /path/to/repo \
+  --json report.json \
+  --md report.md \
+  --plan cleanup-plan.md
+
+# With GitHub API enrichment (PRs, environments, failure rates)
+rrctl repo-defrag \
+  --path /path/to/repo \
+  --github-owner your-org \
+  --github-repo your-repo \
+  --github-token $GITHUB_TOKEN \
+  --days-stale 60 \
+  --json report.json \
+  --md report.md \
+  --plan cleanup-plan.md
+
+# Auto-fix workflows (add concurrency, pin actions)
+# Dry run (default) generates patch without modifying files
+rrctl repo-autofix --path /path/to/repo \
+  --dry-run \
+  --patch autofix.patch
+
+# Apply fixes directly
+rrctl repo-autofix --path /path/to/repo \
+  --dry-run=false
+```
+
+What it checks:
+- .github/workflows: last modified time (stale > N days), schedules, triggers, runners, concurrency settings
+- Pinning of actions: flags uses: owner/repo@main/latest or missing @ref
+- Deprecated runner hints (e.g., ubuntu-22.04 → ubuntu-24.04)
+- Duplicate/overlapping triggers suggesting consolidation
+- Optional GitHub API:
+  - Workflow failure rates (over last N runs)
+  - Stale open PRs (> N days without update)
+  - Stale repository environments (no recent deployments)
+
+Auto-fix capabilities:
+- Add concurrency blocks to prevent duplicate workflow runs
+- Pin common actions (checkout, setup-go, setup-node, etc.) to stable versions
+- Generate unified diff patches for review before applying
+
+Outputs both JSON and Markdown reports with actionable recommendations plus optional Cleanup Plan and patch files.
+
 ### 🔒 Security Suite
+
 ```bash
 # Comprehensive security scanning
 rrctl security scan --comprehensive
@@ -30,6 +86,7 @@ rrctl auto-remediation --issue CVE-2023-1234 --dry-run
 ```
 
 ### 🤖 AI Integration
+
 ```bash
 # Root cause analysis with Ollama
 rrctl rca oracle "build failing with dependency errors"
@@ -42,6 +99,7 @@ rrctl ai oracle chat --interactive
 ```
 
 ### 🚀 DevOps Automation
+
 ```bash
 # Round-robin deployment
 rrctl roundrobin --strategy blue-green
@@ -55,6 +113,7 @@ rrctl git roundrobin --branches feature/*
 ```
 
 ### 📊 Monitoring & Analytics
+
 ```bash
 # Performance monitoring
 rrctl monitor performance --service api-gateway
@@ -68,7 +127,8 @@ rrctl monitor collect --exporter prometheus
 
 ## 🛠️ Installation
 
-### From Source
+### From Source 
+
 ```bash
 git clone https://github.com/kushin77/elevatedIQ.git
 cd elevatedIQ/services/roundrobin-core/cmd/rrctl
@@ -80,13 +140,34 @@ sudo mv rrctl /usr/local/bin/
 Download from [GitHub Releases](https://github.com/kushin77/elevatedIQ/releases)
 
 ### Docker
+
 ```bash
 docker run -it elevatediq/rrctl:latest rrctl --help
 ```
 
 ## 📖 Usage
 
+### Quick Start
+
+```bash
+# One-line install
+curl -fsSL https://raw.githubusercontent.com/kushin77/elevatedIQ/main/rrctl-opensource/install.sh | bash
+
+# Or download binary directly
+# Linux: rrctl-linux-amd64
+# macOS Intel: rrctl-darwin-amd64
+# macOS ARM: rrctl-darwin-arm64
+# Windows: rrctl-windows-amd64.exe
+
+# Verify installation
+rrctl version
+
+# View available commands
+rrctl --help
+```
+
 ### Getting Started
+
 ```bash
 # Initialize rrctl
 rrctl version
@@ -101,6 +182,7 @@ rrctl --verbose security scan
 ### Common Workflows
 
 #### Security-First Development
+
 ```bash
 # 1. Scan code for vulnerabilities
 rrctl security scan --sast --dast
@@ -116,6 +198,7 @@ rrctl git commit --security-verified
 ```
 
 #### AI-Enhanced Development
+
 ```bash
 # 1. Analyze codebase for improvements
 rrctl ai enhancer scan
@@ -128,6 +211,7 @@ rrctl ai document generate --format md
 ```
 
 #### DevOps Orchestration
+
 ```bash
 # 1. Build and test
 rrctl build --parallel
@@ -226,8 +310,11 @@ rrctl test security
 rrctl benchmark --duration 60s
 ```
 
+ 
 ## 📚 Documentation
 
+- [Examples and Use Cases](./EXAMPLES.md) - Real-world scenarios and recipes
+- [Changelog](./CHANGELOG.md) - Version history and updates
 - [Complete Command Reference](./docs/commands.md)
 - [API Documentation](./docs/api.md)
 - [Security Guide](./docs/security.md)
@@ -277,3 +364,4 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 **Ready to supercharge your DevOps workflow?** 🚀
 
 [Get Started](./docs/getting-started.md) | [Security Overview](./docs/security.md) | [AI Features](./docs/ai.md)
+ 
