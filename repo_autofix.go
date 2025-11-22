@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ var (
 	autofixWorkflowsPath string
 	autofixDryRun        bool
 	autofixPatchOut      string
+	autofixJSON          bool
 )
 
 var repoAutofixCmd = &cobra.Command{
@@ -36,6 +38,7 @@ func init() {
 	repoAutofixCmd.Flags().StringVar(&autofixWorkflowsPath, "workflows", ".github/workflows", "Relative path to workflows directory")
 	repoAutofixCmd.Flags().BoolVar(&autofixDryRun, "dry-run", true, "Dry run mode (default true); set false to write changes")
 	repoAutofixCmd.Flags().StringVar(&autofixPatchOut, "patch", "", "Write unified diff patch to file (optional)")
+	repoAutofixCmd.Flags().BoolVar(&autofixJSON, "json", false, "Output results in JSON format")
 }
 
 func runRepoAutofix(cmd *cobra.Command, args []string) error {
@@ -72,13 +75,17 @@ func runRepoAutofix(cmd *cobra.Command, args []string) error {
 
 		fixCount++
 		if autofixDryRun {
-			fmt.Printf("[DRY RUN] Would fix: %s\n", name)
+			if !autofixJSON {
+				fmt.Printf("[DRY RUN] Would fix: %s\n", name)
+			}
 		} else {
 			if err := os.WriteFile(full, []byte(fixed), 0o644); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to write %s: %v\n", full, err)
 				continue
 			}
-			fmt.Printf("Fixed: %s\n", name)
+			if !autofixJSON {
+				fmt.Printf("Fixed: %s\n", name)
+			}
 		}
 
 		// Generate unified diff for patch
@@ -93,7 +100,13 @@ func runRepoAutofix(cmd *cobra.Command, args []string) error {
 		if err := os.WriteFile(autofixPatchOut, []byte(combined), 0o644); err != nil {
 			return fmt.Errorf("write patch: %w", err)
 		}
-		fmt.Printf("Wrote patch to %s\n", autofixPatchOut)
+		if !autofixJSON {
+			fmt.Printf("Wrote patch to %s\n", autofixPatchOut)
+		}
+	}
+
+	if autofixJSON {
+		return outputAutofixJSON(fixCount, autofixDryRun, allPatches)
 	}
 
 	if autofixDryRun {
@@ -104,6 +117,33 @@ func runRepoAutofix(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+type autofixResult struct {
+	Success       bool     `json:"success"`
+	DryRun        bool     `json:"dry_run"`
+	FilesModified int      `json:"files_modified"`
+	PatchFile     string   `json:"patch_file,omitempty"`
+	Message       string   `json:"message"`
+}
+
+func outputAutofixJSON(fixCount int, dryRun bool, patches []string) error {
+	result := autofixResult{
+		Success:       true,
+		DryRun:        dryRun,
+		FilesModified: fixCount,
+		PatchFile:     autofixPatchOut,
+	}
+
+	if dryRun {
+		result.Message = fmt.Sprintf("Dry run complete. %d files would be modified.", fixCount)
+	} else {
+		result.Message = fmt.Sprintf("Applied fixes to %d files.", fixCount)
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(result)
 }
 
 // applyAutoFixes attempts to add concurrency and pin common actions
