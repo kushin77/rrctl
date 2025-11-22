@@ -2,7 +2,21 @@
 
 All notable changes to rrctl will be documented in this file.
 
-## [Unreleased]
+## [1.1.0] - 2025-11-22
+
+### Added
+
+- **JSON output format** for `repo-autofix` command via `--json` flag
+- Structured JSON response schema: `{success, dry_run, files_modified, patch_file, message}`
+- Machine-readable output for CI/CD pipeline integration
+- Suppresses verbose console output when JSON mode is enabled
+
+### Changed
+
+- Improved error handling in `repo-autofix` command
+- Enhanced output formatting for better readability in JSON mode
+
+## [1.0.0] - 2025-11-21
 
 ### Added
 

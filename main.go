@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	version = "v1.0.0"
+	version = "v1.1.0"
 	commit  = "open-source"
 	date    = "2024"
 	builtBy = "community"
