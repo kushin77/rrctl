@@ -1,0 +1,56 @@
+name: SBOM & Keyless Signing
+
+on:
+  workflow_dispatch: {}
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  sbom_and_sign:
+    name: Generate SBOM and Sign (keyless)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create enterprise archive
+        run: |
+          # create a tarball of the repository contents for SBOM/signing
+          TAR=rrctl-open-source-enterprise.tar.gz
+          rm -f "$TAR"
+          tar -czf "$TAR" . || true
+          ls -la "$TAR"
+
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Generate SPDX JSON SBOM
+        run: |
+          syft rrctl-open-source-enterprise.tar.gz -o spdx-json=rrctl-open-source-enterprise.spdx.json
+          ls -la rrctl-open-source-enterprise.spdx.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v2
+
+      - name: Keyless sign artifact (cosign)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          # Keyless sign using GitHub OIDC; this will upload to Rekor by default
+          cosign sign-blob --keyless --output-signature rrctl-open-source-enterprise.tar.gz.sig.b64 rrctl-open-source-enterprise.tar.gz || true
+          ls -la rrctl-open-source-enterprise.tar.gz.sig.b64 || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rrctl-sbom-signature
+          path: |
+            rrctl-open-source-enterprise.tar.gz
+            rrctl-open-source-enterprise.spdx.json
+            rrctl-open-source-enterprise.tar.gz.sig.b64
