@@ -1,0 +1,77 @@
+name: SBOM + GCP KMS Signing
+
+on:
+  workflow_dispatch: {}
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  ARTIFACT: rrctl-open-source-enterprise.tar.gz
+
+jobs:
+  sbom_and_gcp_sign:
+    name: Generate SBOM and Sign (GCP KMS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create enterprise archive
+        run: |
+          rm -f "$ARTIFACT"
+          tar -czf "$ARTIFACT" . || true
+          ls -la "$ARTIFACT"
+
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Generate SPDX JSON SBOM
+        run: |
+          syft "$ARTIFACT" -o spdx-json=rrctl-open-source-enterprise.spdx.json
+          ls -la rrctl-open-source-enterprise.spdx.json
+
+      - name: Create checksums
+        run: |
+          sha256sum "$ARTIFACT" > "$ARTIFACT".sha256
+          md5sum "$ARTIFACT" > "$ARTIFACT".md5
+          ls -la *.sha256 *.md5 || true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v2
+
+      - name: Authenticate to GCP (Workload Identity)
+        if: ${{ secrets.GCP_WIF_PROVIDER != '' && secrets.GCP_SA_EMAIL != '' }}
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: KMS sign artifact (GCP example)
+        if: ${{ secrets.GCP_KMS_KEY != '' && secrets.GCP_WIF_PROVIDER != '' && secrets.GCP_SA_EMAIL != '' }}
+        run: |
+          # EXPECTED: secrets.GCP_KMS_KEY contains the KMS key resource identifier in form projects/PROJECT/locations/LOCATION/keyRings/RING/cryptoKeys/KEY
+          echo "Signing with GCP KMS key: $GCP_KMS_KEY"
+          # cosign expects key URI like gcpkms://projects/PROJECT/locations/LOCATION/keyRings/RING/cryptoKeys/KEY
+          cosign sign --key "gcpkms://${{ secrets.GCP_KMS_KEY }}@latest" "$ARTIFACT"
+          ls -la "$ARTIFACT"*
+
+      - name: Upload artifacts to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT }}
+            rrctl-open-source-enterprise.spdx.json
+            ${{ env.ARTIFACT }}.sha256
+            ${{ env.ARTIFACT }}.md5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
