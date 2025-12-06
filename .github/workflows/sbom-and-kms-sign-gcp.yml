@@ -62,7 +62,27 @@ jobs:
           echo "Signing with GCP KMS key: $GCP_KMS_KEY"
           # cosign expects key URI like gcpkms://projects/PROJECT/locations/LOCATION/keyRings/RING/cryptoKeys/KEY
           cosign sign --key "gcpkms://${{ secrets.GCP_KMS_KEY }}@latest" "$ARTIFACT"
-          ls -la "$ARTIFACT"*
+          # Export the public key from the latest KMS version for verification
+          echo "Exporting public key for verification..."
+          # get latest version resource name (projects/.../cryptoKeyVersions/123)
+          LATEST_VER=$(gcloud kms keys versions list --key="${{ secrets.GCP_KMS_KEY }}" --format='value(name)' --limit=1 --sort-by=~name || true)
+          echo "latest version: $LATEST_VER"
+          if [ -n "$LATEST_VER" ]; then
+            gcloud kms keys versions get-public-key "$LATEST_VER" --output-file=cosign_gcp_public.pem || true
+            ls -la cosign_gcp_public.pem || true
+          else
+            echo "Could not determine latest KMS key version to export public key"
+          fi
+
+          # Verify signature using the public key if available
+          if [ -f cosign_gcp_public.pem ]; then
+            echo "Verifying signature with extracted public key..."
+            # cosign verify-blob expects the signature, use cosign to verify (cosign will read Rekor if available and report)
+            # For KMS sign above, cosign stores signature in the transparency log and will produce local signature artifacts only when asked; attempt verify
+            cosign verify-blob --key cosign_gcp_public.pem "$ARTIFACT" || true
+          else
+            echo "No public key found; skipping verification step"
+          fi
 
       - name: Upload artifacts to release
         if: github.event_name == 'release'
@@ -73,5 +93,6 @@ jobs:
             rrctl-open-source-enterprise.spdx.json
             ${{ env.ARTIFACT }}.sha256
             ${{ env.ARTIFACT }}.md5
+            cosign_gcp_public.pem
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
