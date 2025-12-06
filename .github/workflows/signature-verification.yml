@@ -1,0 +1,62 @@
+name: Scheduled Signature Verification
+
+on:
+  schedule:
+    - cron: '0 2 * * 0' # weekly on Sunday at 02:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  verify_signatures:
+    name: Verify release signatures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for tools)
+        uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v2
+
+      - name: Download latest release artifacts
+        run: |
+          set -euo pipefail
+          TAG=$(gh release list --limit 1 --repo $GITHUB_REPOSITORY --json tagName --jq '.[0].tagName')
+          echo "Checking release: $TAG"
+          mkdir -p artifacts && cd artifacts
+          gh release download "$TAG" --repo $GITHUB_REPOSITORY || true
+          ls -la || true
+
+      - name: Verify signatures with Rekor (keyless)
+        env:
+          REKOR_URL: ${{ secrets.REKOR_URL }}
+        run: |
+          set -euo pipefail
+          REKOR=${REKOR_URL:-"https://rekor.sigstore.dev"}
+          FAIL=0
+          for f in *.tar.gz; do
+            [ -f "$f" ] || continue
+            echo "Verifying $f against Rekor $REKOR"
+            if cosign verify-blob --keyless --rekor-url "$REKOR" "$f"; then
+              echo "$f verified ok"
+            else
+              echo "$f verification failed"; FAIL=1
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "One or more verifications failed"; exit 2
+          fi
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Scheduled signature verification failure',
+              body: 'Automated signature verification detected a failure for the latest release. Please investigate Rekor availability or the signing workflow.'
+            });
