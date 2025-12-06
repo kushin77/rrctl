@@ -1,0 +1,77 @@
+name: SBOM + KMS-backed Signing
+
+on:
+  workflow_dispatch: {}
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  ARTIFACT: rrctl-open-source-enterprise.tar.gz
+
+jobs:
+  sbom_and_kms_sign:
+    name: Generate SBOM and Sign (KMS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create enterprise archive
+        run: |
+          rm -f "$ARTIFACT"
+          tar -czf "$ARTIFACT" . || true
+          ls -la "$ARTIFACT"
+
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft version
+
+      - name: Generate SPDX JSON SBOM
+        run: |
+          syft "$ARTIFACT" -o spdx-json=rrctl-open-source-enterprise.spdx.json
+          ls -la rrctl-open-source-enterprise.spdx.json
+
+      - name: Create checksums
+        run: |
+          sha256sum "$ARTIFACT" > "$ARTIFACT".sha256
+          md5sum "$ARTIFACT" > "$ARTIFACT".md5
+          ls -la *.sha256 *.md5 || true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v2
+
+      - name: Configure AWS credentials (if using AWS KMS)
+        if: always()
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: KMS sign artifact (AWS example)
+        if: ${{ secrets.SIGNING_KEY_ARN != '' }}
+        run: |
+          # Example: SIGNING_KEY_ARN should be set to the KMS Key ARN, e.g. arn:aws:kms:REGION:ACCOUNT:key/KEYID
+          cosign sign --key awskms://${{ secrets.SIGNING_KEY_ARN }} "$ARTIFACT"
+          # The public key material can be retrieved or published as part of key management
+          ls -la "$ARTIFACT"*
+
+      - name: Upload artifacts to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ARTIFACT }}
+            rrctl-open-source-enterprise.spdx.json
+            ${{ env.ARTIFACT }}.sha256
+            ${{ env.ARTIFACT }}.md5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
