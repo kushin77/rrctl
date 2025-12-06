@@ -39,12 +39,32 @@ jobs:
         uses: sigstore/cosign-installer@v2
 
       - name: Keyless sign artifact (cosign)
-        env:
-          COSIGN_EXPERIMENTAL: '1'
-        run: |
-          # Keyless sign using GitHub OIDC; this will upload to Rekor by default
-          cosign sign-blob --keyless --output-signature rrctl-open-source-enterprise.tar.gz.sig.b64 rrctl-open-source-enterprise.tar.gz || true
-          ls -la rrctl-open-source-enterprise.tar.gz.sig.b64 || true
+            - name: Keyless sign artifact (cosign) with retries
+              env:
+                COSIGN_EXPERIMENTAL: '1'
+                REKOR_URL: ${{ secrets.REKOR_URL }}
+              run: |
+                set -euo pipefail
+                REKOR=${REKOR_URL:-"https://rekor.sigstore.dev"}
+                MAX_ATTEMPTS=5
+                ATTEMPT=0
+                SIGN_OK=0
+                while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+                  ATTEMPT=$((ATTEMPT+1))
+                  echo "Attempt $ATTEMPT to cosign sign-blob (keyless) against $REKOR"
+                  if cosign sign-blob --keyless --rekor-url "$REKOR" --output-signature rrctl-open-source-enterprise.tar.gz.sig.b64 rrctl-open-source-enterprise.tar.gz; then
+                    SIGN_OK=1
+                    echo "cosign sign-blob succeeded"
+                    break
+                  fi
+                  echo "cosign sign-blob failed on attempt $ATTEMPT"
+                  sleep $((2 ** ATTEMPT))
+                done
+                if [ "$SIGN_OK" -ne 1 ]; then
+                  echo "Keyless signing failed after $MAX_ATTEMPTS attempts; creating marker file"
+                  echo "REKOR_UPLOAD_FAILED" > rekor_upload_failed.txt
+                fi
+                ls -la rrctl-open-source-enterprise.tar.gz.sig.b64 || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
