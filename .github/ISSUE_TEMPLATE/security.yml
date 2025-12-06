@@ -1,0 +1,97 @@
+name: Security Vulnerability Report
+description: Report a security vulnerability in rrctl
+title: "[SECURITY] "
+labels: ["security", "vulnerability"]
+assignees: ["elevatediq/security-team"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **IMPORTANT: Please do NOT disclose the vulnerability publicly until we've had time to patch it.**
+        
+        For security issues, please email security@elevatediq.com instead of opening a public issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Vulnerability Description
+      description: Describe the security vulnerability in detail
+      placeholder: |
+        Provide a clear description of the vulnerability.
+        Include CVSS score if applicable (https://www.first.org/cvss/calculator/3.1).
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this vulnerability?
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What is the impact of this vulnerability?
+      placeholder: |
+        - Unauthorized access to [resource]
+        - Data exposure of [type]
+        - Code execution via [method]
+        - Denial of service via [mechanism]
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: rrctl Version
+      description: What version of rrctl are you using?
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment_details
+    attributes:
+      label: Environment Details
+      description: OS, Go version, Docker version, etc.
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Go version: 1.21
+        - Docker version: 24.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: proof_of_concept
+    attributes:
+      label: Proof of Concept / Exploit Code
+      description: Share PoC code (safely) to demonstrate the vulnerability
+      render: go
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Suggested Remediation
+      description: How should this vulnerability be fixed?
+      placeholder: |
+        - Input validation on [field]
+        - Output encoding in [function]
+        - Dependency update to [package]
+
+  - type: checkboxes
+    id: acknowledgment
+    attributes:
+      label: Acknowledgment
+      options:
+        - label: "I understand this is a security issue and should not be disclosed publicly"
+          required: true
+        - label: "I have not disclosed this vulnerability publicly"
+          required: true
