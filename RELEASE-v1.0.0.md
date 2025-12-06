@@ -88,3 +88,14 @@ SHA256 checksums for all binaries are available in [checksums.txt](https://githu
 ---
 
 **Ready for Customer Use** - Fully tested, documented, and packaged for immediate deployment.
+
+## 🔗 Supply-chain artifacts (SBOM, checksums, signatures)
+
+To improve supply-chain transparency this release has accompanying artifacts that were generated and attached to the GitHub release assets:
+
+- SPDX SBOM (syft): rrctl-open-source-enterprise.spdx.json
+- Release archive: rrctl-open-source-enterprise.tar.gz
+- Checksums: rrctl-open-source-enterprise.tar.gz.sha256 and .md5
+- Cosign signature: rrctl-open-source-enterprise.tar.gz.sig.b64 (ephemeral key/demo)
+
+These artifacts are available on the GitHub Releases page for this project (see the Assets section) and can be used to verify the provenance of the distributed binaries. For production verification, prefer Rekor-anchored signatures or KMS-backed cosign keys (see the project delivery notes for recommended hardening steps).
