@@ -102,5 +102,5 @@ jobs:
                 body: `The keyless cosign sign-blob step failed to upload to Rekor after multiple retries. Artifacts were still attached to the release but signatures are not Rekor-anchored. Please investigate runner networking or configure a KMS-backed signing workflow.`
               });
             } else {
-              core.info('No Rekor failure marker present; no issue created.');
+              console.log('No Rekor failure marker present; no issue created.');
             }
