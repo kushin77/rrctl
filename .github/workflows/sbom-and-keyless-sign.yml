@@ -37,34 +37,32 @@ jobs:
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v2
-
-      - name: Keyless sign artifact (cosign)
-            - name: Keyless sign artifact (cosign) with retries
-              env:
-                COSIGN_EXPERIMENTAL: '1'
-                REKOR_URL: ${{ secrets.REKOR_URL }}
-              run: |
-                set -euo pipefail
-                REKOR=${REKOR_URL:-"https://rekor.sigstore.dev"}
-                MAX_ATTEMPTS=5
-                ATTEMPT=0
-                SIGN_OK=0
-                while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-                  ATTEMPT=$((ATTEMPT+1))
-                  echo "Attempt $ATTEMPT to cosign sign-blob (keyless) against $REKOR"
-                  if cosign sign-blob --keyless --rekor-url "$REKOR" --output-signature rrctl-open-source-enterprise.tar.gz.sig.b64 rrctl-open-source-enterprise.tar.gz; then
-                    SIGN_OK=1
-                    echo "cosign sign-blob succeeded"
-                    break
-                  fi
-                  echo "cosign sign-blob failed on attempt $ATTEMPT"
-                  sleep $((2 ** ATTEMPT))
-                done
-                if [ "$SIGN_OK" -ne 1 ]; then
-                  echo "Keyless signing failed after $MAX_ATTEMPTS attempts; creating marker file"
-                  echo "REKOR_UPLOAD_FAILED" > rekor_upload_failed.txt
-                fi
-                ls -la rrctl-open-source-enterprise.tar.gz.sig.b64 || true
+      - name: Keyless sign artifact (cosign) with retries
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+          REKOR_URL: ${{ secrets.REKOR_URL }}
+        run: |
+          set -euo pipefail
+          REKOR=${REKOR_URL:-"https://rekor.sigstore.dev"}
+          MAX_ATTEMPTS=5
+          ATTEMPT=0
+          SIGN_OK=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT+1))
+            echo "Attempt $ATTEMPT to cosign sign-blob (keyless) against $REKOR"
+            if cosign sign-blob --keyless --rekor-url "$REKOR" --output-signature rrctl-open-source-enterprise.tar.gz.sig.b64 rrctl-open-source-enterprise.tar.gz; then
+              SIGN_OK=1
+              echo "cosign sign-blob succeeded"
+              break
+            fi
+            echo "cosign sign-blob failed on attempt $ATTEMPT"
+            sleep $((2 ** ATTEMPT))
+          done
+          if [ "$SIGN_OK" -ne 1 ]; then
+            echo "Keyless signing failed after $MAX_ATTEMPTS attempts; creating marker file"
+            echo "REKOR_UPLOAD_FAILED" > rekor_upload_failed.txt
+          fi
+          ls -la rrctl-open-source-enterprise.tar.gz.sig.b64 || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -74,3 +72,35 @@ jobs:
             rrctl-open-source-enterprise.tar.gz
             rrctl-open-source-enterprise.spdx.json
             rrctl-open-source-enterprise.tar.gz.sig.b64
+            rekor_upload_failed.txt
+
+      - name: Attach artifacts to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            rrctl-open-source-enterprise.tar.gz
+            rrctl-open-source-enterprise.spdx.json
+            rrctl-open-source-enterprise.tar.gz.sig.b64
+            rekor_upload_failed.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Rekor failure (create issue)
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('rekor_upload_failed.txt')) {
+              const tag = process.env.GITHUB_REF_NAME || process.env.GITHUB_REF || 'unknown';
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Rekor upload failed for release ${tag}`,
+                body: `The keyless cosign sign-blob step failed to upload to Rekor after multiple retries. Artifacts were still attached to the release but signatures are not Rekor-anchored. Please investigate runner networking or configure a KMS-backed signing workflow.`
+              });
+            } else {
+              console.log('No Rekor failure marker present; no issue created.');
+            }
